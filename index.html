@@ -397,6 +397,14 @@
         <label>Number</label>
         <input type="number" id="event-number" placeholder="e.g. 42" />
       </div>
+      <div>
+        <label>Time</label>
+        <select id="event-time">
+          <option value="06:00">06:00</option>
+          <option value="06:30">06:30</option>
+          <option value="07:00" selected>07:00</option>
+        </select>
+      </div>
     </div>
 
     <div class="field-group">
@@ -487,7 +495,7 @@
         <button type="button" data-cmd="removeFormat" title="Clear formatting">✕</button>
       </div>
       <div class="rt-editor" id="tpl-body" contenteditable="true" data-placeholder="e.g. Send a card to {contact.name} on {date}."></div>
-      <p class="hint">Placeholders: <code>{date}</code>, <code>{date2}</code>, <code>{number}</code>, <code>{contact.name|email|phone}</code>, <code>{store.name|number}</code>.</p>
+      <p class="hint">Placeholders: <code>{date}</code>, <code>{date2}</code>, <code>{time}</code>, <code>{number}</code>, <code>{contact.name|email|phone}</code>, <code>{store.name|number}</code>.</p>
       <div class="actions">
         <button class="primary" id="tpl-save">Save</button>
         <button id="tpl-new">New</button>
@@ -768,6 +776,7 @@ document.getElementById("ct-new").addEventListener("click", () => {
 const dateEl = document.getElementById("event-date");
 const extraDateEl = document.getElementById("event-extra-date");
 const numberEl = document.getElementById("event-number");
+const timeEl = document.getElementById("event-time");
 const previewBodyEl = document.getElementById("preview-body");
 
 function todayISO() {
@@ -831,6 +840,7 @@ function fillPlaceholders(text, opts = {}) {
     if (key === "date2") return wrap(formatDate(extraDateEl.value));
     if (key === "date2:iso") return wrap(extraDateEl.value || "");
     if (key === "number") return wrap(numberEl.value || "");
+    if (key === "time") return wrap(timeEl.value || "");
     if (key.startsWith("contact.")) {
       const field = key.slice("contact.".length);
       if (!contact) return full;
@@ -975,6 +985,7 @@ function resetForNextEvent() {
   dateEl.value = todayISO();
   extraDateEl.value = "";
   numberEl.value = "";
+  timeEl.value = "07:00";
   storeSearchEl.value = "";
   contactSearchEl.value = "";
   save();
@@ -1032,6 +1043,7 @@ document.getElementById("select-template").addEventListener("change", e => {
 dateEl.addEventListener("change", () => renderPreview());
 extraDateEl.addEventListener("change", () => renderPreview());
 numberEl.addEventListener("input", () => renderPreview());
+timeEl.addEventListener("change", () => renderPreview());
 
 composeRequiredEl.addEventListener("input", () => { state.composeRequired = composeRequiredEl.value; save(); });
 composeOptionalEl.addEventListener("input", () => { state.composeOptional = composeOptionalEl.value; save(); });
