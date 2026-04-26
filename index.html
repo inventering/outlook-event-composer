@@ -1,0 +1,1668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Outlook Event Composer</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --border: #e3e6eb;
+    --text: #1f2330;
+    --muted: #6b7280;
+    --accent: #0078d4;
+    --accent-hover: #106ebe;
+    --danger: #c43c3c;
+    --danger-bg: #fde8e8;
+    --code-bg: #f0f2f5;
+    --input-bg: #ffffff;
+    --chip-bg: #e8f1fb;
+    --chip-text: #0a4a8a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161922;
+      --panel: #1f232d;
+      --border: #2e3340;
+      --text: #e6e8ed;
+      --muted: #98a1b3;
+      --accent: #4a9eff;
+      --accent-hover: #6cb0ff;
+      --danger: #ef6b6b;
+      --danger-bg: #3a1d1d;
+      --code-bg: #262b36;
+      --input-bg: #181c25;
+      --chip-bg: #1d3550;
+      --chip-text: #b6d6f5;
+    }
+    input::-webkit-calendar-picker-indicator { filter: invert(0.85); }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  header {
+    padding: 14px 24px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  main {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .panel h2 {
+    margin: 0 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  .tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 14px;
+  }
+  .tab {
+    padding: 8px 14px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-weight: 500;
+    border-radius: 0;
+    cursor: pointer;
+    margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text); background: transparent; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .field-group { margin-top: 10px; }
+  .field-group:first-child { margin-top: 0; }
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin: 8px 0 4px;
+  }
+  label:first-child { margin-top: 0; }
+  input, textarea, select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    background: var(--input-bg);
+    color: var(--text);
+  }
+  input[type="file"] { padding: 4px; }
+  input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.7; }
+  textarea { resize: vertical; min-height: 80px; font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 13px; }
+  .rt-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    background: var(--code-bg);
+  }
+  .rt-toolbar button {
+    padding: 4px 8px;
+    font-size: 13px;
+    line-height: 1;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    min-width: 28px;
+  }
+  .rt-toolbar button:hover { background: var(--input-bg); border-color: var(--border); }
+  .rt-toolbar button.active { background: var(--input-bg); border-color: var(--border); color: var(--accent); }
+  .rt-toolbar .rt-sep { width: 1px; background: var(--border); margin: 2px 4px; }
+  .rt-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    padding: 2px 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    color: var(--text);
+    background: transparent;
+  }
+  .rt-color:hover { background: var(--input-bg); border-color: var(--border); }
+  .rt-color span.swatch {
+    display: inline-block;
+    width: 12px;
+    height: 4px;
+    margin-left: 2px;
+    border: 1px solid var(--border);
+    border-radius: 1px;
+    background: currentColor;
+  }
+  .rt-color input[type="color"] {
+    width: 0;
+    height: 0;
+    padding: 0;
+    border: none;
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+  }
+  .rt-editor {
+    min-height: 110px;
+    max-height: 260px;
+    overflow: auto;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 0 0 6px 6px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .rt-editor:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(74,158,255,0.2); }
+  .rt-editor:empty:before {
+    content: attr(data-placeholder);
+    color: var(--muted);
+    opacity: 0.7;
+    pointer-events: none;
+  }
+  .rt-editor p { margin: 0 0 0.5em; }
+  .rt-editor ul, .rt-editor ol { margin: 0.25em 0; padding-left: 1.4em; }
+  .rt-editor a { color: var(--accent); }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0,120,212,0.15);
+  }
+  button {
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--text);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  button:hover:not(:disabled) { background: var(--code-bg); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  button.danger { color: var(--danger); border-color: transparent; padding: 4px 8px; background: transparent; }
+  button.danger:hover { background: var(--danger-bg); }
+  .combobox { position: relative; }
+  .combobox input { padding-right: 32px; }
+  .combobox-clear {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 18px;
+    line-height: 1;
+    padding: 2px 6px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .combobox-clear:hover { background: var(--code-bg); color: var(--text); }
+  .combobox-menu {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    max-height: 240px;
+    overflow: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+  }
+  .combobox-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .combobox-item:hover, .combobox-item.active { background: var(--code-bg); }
+  .combobox-item .ci-name { font-weight: 500; }
+  .combobox-item .ci-meta { color: var(--muted); font-size: 12px; }
+  .combobox-empty { padding: 10px 12px; color: var(--muted); font-style: italic; font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 4px 3px 10px;
+    background: var(--chip-bg);
+    color: var(--chip-text);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .chip button {
+    background: transparent;
+    border: none;
+    color: inherit;
+    padding: 0 6px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    border-radius: 999px;
+  }
+  .chip button:hover { background: rgba(0,0,0,0.1); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--code-bg);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .item.selected { outline: 2px solid var(--accent); }
+  .item .name { flex: 1; font-weight: 500; }
+  .item .meta { color: var(--muted); font-size: 12px; }
+  .empty { color: var(--muted); font-style: italic; padding: 8px; }
+  .hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  code {
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .preview {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 8px;
+    white-space: pre-wrap;
+    font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+    font-size: 13px;
+    max-height: 240px;
+    overflow: auto;
+  }
+  #preview-body {
+    white-space: normal;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  #preview-body p { margin: 0 0 0.5em; }
+  #preview-body ul, #preview-body ol { margin: 0.25em 0; padding-left: 1.4em; }
+  #preview-body a { color: var(--accent); }
+  .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .custom-fields { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .custom-fields .row input { flex: 1; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 32px;
+    transform: translateX(-50%) translateY(20px);
+    background: #1f232d;
+    color: #f5f6f8;
+    border: 1px solid #2e3340;
+    padding: 10px 18px;
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease, transform 180ms ease;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Outlook Event Composer</h1>
+</header>
+
+<main>
+  <section class="panel compose">
+    <h2>Compose</h2>
+
+    <div class="field-group form-grid">
+      <div>
+        <label>Template</label>
+        <select id="select-template"></select>
+      </div>
+      <div>
+        <label>Contact</label>
+        <div class="combobox" id="contact-combobox">
+          <input id="contact-search" autocomplete="off" placeholder="Type to search contacts…" />
+          <button type="button" id="contact-clear" class="combobox-clear" title="Clear contact" hidden>×</button>
+          <div class="combobox-menu" id="contact-menu" hidden></div>
+        </div>
+      </div>
+      <div>
+        <label>Event date</label>
+        <input type="date" id="event-date" />
+      </div>
+    </div>
+    <div id="extra-dates-container" class="form-grid field-group"></div>
+
+    <div class="field-group">
+      <label>Store <span class="hint" style="font-weight:400">— BC → required, DC → optional</span></label>
+      <div class="combobox" id="store-combobox">
+        <input id="store-search" autocomplete="off" placeholder="Type to search stores…" />
+        <button type="button" id="store-clear" class="combobox-clear" title="Clear store" hidden>×</button>
+        <div class="combobox-menu" id="store-menu" hidden></div>
+      </div>
+    </div>
+
+    <div class="field-group form-grid">
+      <div>
+        <label>Required attendees</label>
+        <div class="row">
+          <input id="compose-required" placeholder="comma-separated emails" />
+          <select id="add-required-contact" style="max-width:120px"><option value="">+ contact</option></select>
+        </div>
+      </div>
+      <div>
+        <label>Optional attendees</label>
+        <div class="row">
+          <input id="compose-optional" placeholder="comma-separated emails" />
+          <select id="add-optional-contact" style="max-width:120px"><option value="">+ contact</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label>Subject preview</label>
+      <div class="preview" id="preview-subject" style="max-height:60px"></div>
+    </div>
+    <div class="field-group">
+      <label>Body preview</label>
+      <div class="preview" id="preview-body"></div>
+    </div>
+
+    <div class="actions">
+      <button class="primary" id="open-outlook">Open in Outlook</button>
+      <button id="copy-link">Copy link</button>
+      <button id="download-ics">Download .ics</button>
+    </div>
+    <p class="hint" id="send-status" hidden></p>
+  </section>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <aside class="panel data-panel">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="templates">Templates</button>
+      <button class="tab" data-tab="contacts">Contacts</button>
+      <button class="tab" data-tab="stores">Stores</button>
+    </div>
+
+    <section class="tab-panel active" data-panel="templates">
+      <div class="list" id="template-list"></div>
+      <label>Name</label>
+      <input id="tpl-name" placeholder="e.g. Birthday reminder" />
+      <label>Subject</label>
+      <input id="tpl-subject" placeholder="e.g. {store.number} — {store.name} visit" />
+      <label>Body</label>
+      <div class="rt-toolbar" id="tpl-body-toolbar">
+        <button type="button" data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+        <button type="button" data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+        <button type="button" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+        <span class="rt-sep"></span>
+        <button type="button" data-cmd="insertUnorderedList" title="Bullet list">•</button>
+        <button type="button" data-cmd="insertOrderedList" title="Numbered list">1.</button>
+        <span class="rt-sep"></span>
+        <label class="rt-color" title="Text color" id="rt-fore">
+          <span style="font-weight:600">A</span>
+          <span class="swatch"></span>
+          <input type="color" data-cmd="foreColor" value="#d13438" />
+        </label>
+        <label class="rt-color" title="Highlight color" id="rt-back">
+          <span style="font-weight:600">▮</span>
+          <span class="swatch"></span>
+          <input type="color" data-cmd="hiliteColor" value="#fff176" />
+        </label>
+        <span class="rt-sep"></span>
+        <button type="button" data-cmd="createLink" title="Insert link">🔗</button>
+        <button type="button" data-cmd="unlink" title="Remove link">⛓</button>
+        <button type="button" data-cmd="removeFormat" title="Clear formatting">✕</button>
+      </div>
+      <div class="rt-editor" id="tpl-body" contenteditable="true" data-placeholder="e.g. Send a card to {contact.name} on {date}."></div>
+      <label>Extra date pickers (comma-separated names)</label>
+      <input id="tpl-extra-dates" placeholder="e.g. deadline, followUp" />
+      <p class="hint">Placeholders: <code>{date}</code>, <code>{date.name}</code>, <code>{contact.name|email|phone}</code>, <code>{store.name|number}</code>.</p>
+      <div class="actions">
+        <button class="primary" id="tpl-save">Save</button>
+        <button id="tpl-new">New</button>
+        <span style="flex:1"></span>
+        <button id="tpl-export">Export .xlsx</button>
+        <button id="tpl-import">Import .xlsx</button>
+      </div>
+    </section>
+
+    <section class="tab-panel" data-panel="contacts">
+      <div class="list" id="contact-list"></div>
+      <label>Name</label>
+      <input id="ct-name" placeholder="e.g. Alice" />
+      <div class="form-grid">
+        <div>
+          <label>Email</label>
+          <input id="ct-email" placeholder="alice@example.com" />
+        </div>
+        <div>
+          <label>Phone</label>
+          <input id="ct-phone" placeholder="+1 555 123 4567" />
+        </div>
+      </div>
+      <label>Custom fields</label>
+      <div class="custom-fields" id="ct-custom-fields"></div>
+      <button id="ct-add-field" style="margin-top:6px">+ Add field</button>
+      <div class="actions">
+        <button class="primary" id="ct-save">Save</button>
+        <button id="ct-new">New</button>
+        <span style="flex:1"></span>
+        <button id="ct-export">Export .xlsx</button>
+        <button id="ct-import">Import .xlsx</button>
+      </div>
+    </section>
+
+    <section class="tab-panel" data-panel="stores">
+      <p class="hint" style="margin-top:0">Excel/CSV columns: <code>Store</code>, <code>Number</code>, <code>BC</code>, <code>DC</code>.</p>
+      <div class="row">
+        <input type="file" id="store-file" accept=".xlsx,.xls,.csv" />
+        <button id="clear-stores" class="danger">Clear all</button>
+      </div>
+      <div id="store-count" class="hint" style="margin-top:8px"></div>
+      <div class="list" id="store-list" style="margin-top:8px; max-height:360px; overflow:auto"></div>
+    </section>
+  </aside>
+</main>
+
+<script>
+const STORAGE_KEY = "outlook-composer-v1";
+
+const defaultState = {
+  templates: [
+    {
+      id: crypto.randomUUID(),
+      name: "Store visit",
+      subject: "{store.number} — {store.name} visit on {date}",
+      body: "Visiting {store.name} (#{store.number}) on {date}.",
+      extraDates: []
+    }
+  ],
+  composeRequired: "",
+  composeOptional: "",
+  stores: [],
+  addedStoreName: null,
+  contacts: [],
+  selectedTemplateId: null,
+  selectedContactId: null,
+  editingTemplateId: null,
+  editingContactId: null
+};
+
+let state = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return structuredClone(defaultState);
+    const parsed = JSON.parse(raw);
+    return { ...structuredClone(defaultState), ...parsed };
+  } catch {
+    return structuredClone(defaultState);
+  }
+}
+
+function save() {
+  const { editingTemplateId, editingContactId, ...persisted } = state;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+}
+
+// ---------- Templates ----------
+const tplListEl = document.getElementById("template-list");
+const tplNameEl = document.getElementById("tpl-name");
+const tplSubjectEl = document.getElementById("tpl-subject");
+const tplBodyEl = document.getElementById("tpl-body");
+const tplExtraDatesEl = document.getElementById("tpl-extra-dates");
+
+const composeRequiredEl = document.getElementById("compose-required");
+const composeOptionalEl = document.getElementById("compose-optional");
+const addRequiredContactEl = document.getElementById("add-required-contact");
+const addOptionalContactEl = document.getElementById("add-optional-contact");
+const previewSubjectEl = document.getElementById("preview-subject");
+
+const extraDateValues = {};
+const extraDatesContainer = document.getElementById("extra-dates-container");
+
+function parseExtraDates(str) {
+  return (str || "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function renderTemplates() {
+  tplListEl.innerHTML = "";
+  if (!state.templates.length) {
+    tplListEl.innerHTML = '<div class="empty">No templates yet.</div>';
+  }
+  state.templates.forEach(t => {
+    const div = document.createElement("div");
+    div.className = "item" + (t.id === state.editingTemplateId ? " selected" : "");
+    div.innerHTML = `<span class="name"></span><button class="danger" data-action="delete">Delete</button>`;
+    div.querySelector(".name").textContent = t.name || "(unnamed)";
+    div.addEventListener("click", e => {
+      if (e.target.dataset.action === "delete") {
+        state.templates = state.templates.filter(x => x.id !== t.id);
+        if (state.selectedTemplateId === t.id) state.selectedTemplateId = null;
+        if (state.editingTemplateId === t.id) clearTplForm();
+        save(); renderAll();
+      } else {
+        loadTplForm(t);
+      }
+    });
+    tplListEl.appendChild(div);
+  });
+
+  const sel = document.getElementById("select-template");
+  sel.innerHTML = '<option value="">— none —</option>';
+  state.templates.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = t.name || "(unnamed)";
+    if (t.id === state.selectedTemplateId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function loadTplForm(t) {
+  state.editingTemplateId = t.id;
+  tplNameEl.value = t.name;
+  tplSubjectEl.value = t.subject || "";
+  tplBodyEl.innerHTML = looksLikeHtml(t.body) ? (t.body || "") : plainTextToHtml(t.body || "");
+  tplExtraDatesEl.value = (t.extraDates || []).join(", ");
+  renderTemplates();
+}
+
+function clearTplForm() {
+  state.editingTemplateId = null;
+  tplNameEl.value = "";
+  tplSubjectEl.value = "";
+  tplBodyEl.innerHTML = "";
+  tplExtraDatesEl.value = "";
+}
+
+document.getElementById("tpl-save").addEventListener("click", () => {
+  const data = {
+    name: tplNameEl.value.trim(),
+    subject: tplSubjectEl.value,
+    body: tplBodyEl.innerHTML,
+    extraDates: parseExtraDates(tplExtraDatesEl.value)
+  };
+  if (!data.name) { alert("Template needs a name."); return; }
+  if (state.editingTemplateId) {
+    const t = state.templates.find(x => x.id === state.editingTemplateId);
+    Object.assign(t, data);
+  } else {
+    const t = { id: crypto.randomUUID(), ...data };
+    state.templates.push(t);
+    state.editingTemplateId = t.id;
+    state.selectedTemplateId = t.id;
+  }
+  save(); renderAll();
+});
+
+document.getElementById("tpl-new").addEventListener("click", () => {
+  clearTplForm();
+  renderTemplates();
+});
+
+// ---------- Contacts ----------
+const ctListEl = document.getElementById("contact-list");
+const ctNameEl = document.getElementById("ct-name");
+const ctEmailEl = document.getElementById("ct-email");
+const ctPhoneEl = document.getElementById("ct-phone");
+const ctCustomEl = document.getElementById("ct-custom-fields");
+
+function renderContacts() {
+  ctListEl.innerHTML = "";
+  if (!state.contacts.length) {
+    ctListEl.innerHTML = '<div class="empty">No contacts yet.</div>';
+  }
+  state.contacts.forEach(c => {
+    const div = document.createElement("div");
+    div.className = "item" + (c.id === state.editingContactId ? " selected" : "");
+    div.innerHTML = `<span class="name"></span><span class="meta"></span><button class="danger" data-action="delete">Delete</button>`;
+    div.querySelector(".name").textContent = c.name || "(unnamed)";
+    div.querySelector(".meta").textContent = c.email || "";
+    div.addEventListener("click", e => {
+      if (e.target.dataset.action === "delete") {
+        state.contacts = state.contacts.filter(x => x.id !== c.id);
+        if (state.selectedContactId === c.id) state.selectedContactId = null;
+        if (state.editingContactId === c.id) clearCtForm();
+        save(); renderAll();
+      } else {
+        loadCtForm(c);
+      }
+    });
+    ctListEl.appendChild(div);
+  });
+
+  renderSelectedContact();
+}
+
+function renderCustomFields(fields) {
+  ctCustomEl.innerHTML = "";
+  fields.forEach((f, idx) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<input placeholder="key" value="" /><input placeholder="value" value="" /><button class="danger">×</button>`;
+    const [keyEl, valEl, btn] = row.children;
+    keyEl.value = f.key;
+    valEl.value = f.value;
+    keyEl.addEventListener("input", () => f.key = keyEl.value);
+    valEl.addEventListener("input", () => f.value = valEl.value);
+    btn.addEventListener("click", () => {
+      fields.splice(idx, 1);
+      renderCustomFields(fields);
+    });
+    ctCustomEl.appendChild(row);
+  });
+}
+
+let editingCustomFields = [];
+
+function loadCtForm(c) {
+  state.editingContactId = c.id;
+  ctNameEl.value = c.name;
+  ctEmailEl.value = c.email || "";
+  ctPhoneEl.value = c.phone || "";
+  editingCustomFields = Object.entries(c.custom || {}).map(([key, value]) => ({ key, value }));
+  renderCustomFields(editingCustomFields);
+  renderContacts();
+}
+
+function clearCtForm() {
+  state.editingContactId = null;
+  ctNameEl.value = "";
+  ctEmailEl.value = "";
+  ctPhoneEl.value = "";
+  editingCustomFields = [];
+  renderCustomFields(editingCustomFields);
+}
+
+document.getElementById("ct-add-field").addEventListener("click", () => {
+  editingCustomFields.push({ key: "", value: "" });
+  renderCustomFields(editingCustomFields);
+});
+
+document.getElementById("ct-save").addEventListener("click", () => {
+  const name = ctNameEl.value.trim();
+  if (!name) { alert("Contact needs a name."); return; }
+  const custom = {};
+  editingCustomFields.forEach(f => {
+    const k = f.key.trim();
+    if (k) custom[k] = f.value;
+  });
+  const data = { name, email: ctEmailEl.value.trim(), phone: ctPhoneEl.value.trim(), custom };
+  if (state.editingContactId) {
+    const c = state.contacts.find(x => x.id === state.editingContactId);
+    Object.assign(c, data);
+  } else {
+    const c = { id: crypto.randomUUID(), ...data };
+    state.contacts.push(c);
+    state.editingContactId = c.id;
+    state.selectedContactId = c.id;
+  }
+  save(); renderAll();
+});
+
+document.getElementById("ct-new").addEventListener("click", () => {
+  clearCtForm();
+  renderContacts();
+});
+
+// ---------- Compose ----------
+const dateEl = document.getElementById("event-date");
+const previewBodyEl = document.getElementById("preview-body");
+
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatDate(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const weekday = date.toLocaleDateString(undefined, { weekday: "long" });
+  const month = date.toLocaleDateString(undefined, { month: "long" });
+  return `${weekday} ${date.getDate()} ${month} ${date.getFullYear()}`;
+}
+
+function getContact() {
+  return state.contacts.find(c => c.id === state.selectedContactId) || null;
+}
+function getTemplate() {
+  return state.templates.find(t => t.id === state.selectedTemplateId) || null;
+}
+
+function getPrimaryStore() {
+  const name = state.addedStoreName;
+  return name ? findStore(name) : null;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function htmlToText(html) {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n");
+  return (tmp.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function plainTextToHtml(text) {
+  return escHtml(text).replace(/\r\n|\r|\n/g, "<br>");
+}
+
+function looksLikeHtml(s) { return /<[a-z][^>]*>/i.test(s || ""); }
+
+function fillPlaceholders(text, opts = {}) {
+  if (!text) return "";
+  const html = !!opts.html;
+  const contact = getContact();
+  const store = getPrimaryStore();
+  const formattedDate = formatDate(dateEl.value);
+  const wrap = v => html ? escHtml(v) : v;
+  return text.replace(/\{([^}]+)\}/g, (full, key) => {
+    key = key.trim();
+    if (key === "date") return wrap(formattedDate);
+    if (key === "date:iso") return wrap(dateEl.value || "");
+    if (key.startsWith("date.")) {
+      const rest = key.slice("date.".length);
+      const isIso = rest.endsWith(":iso");
+      const name = isIso ? rest.slice(0, -":iso".length) : rest;
+      const iso = extraDateValues[name] || "";
+      return wrap(isIso ? iso : formatDate(iso));
+    }
+    if (key.startsWith("contact.")) {
+      const field = key.slice("contact.".length);
+      if (!contact) return full;
+      if (field === "name") return wrap(contact.name || "");
+      if (field === "email") return wrap(contact.email || "");
+      if (field === "phone") return wrap(contact.phone || "");
+      return wrap((contact.custom && contact.custom[field]) || "");
+    }
+    if (key.startsWith("store.")) {
+      const field = key.slice("store.".length);
+      if (!store) return full;
+      if (field === "name") return wrap(store.store || "");
+      if (field === "number") return wrap(store.number || "");
+      if (field === "bc") return wrap(store.bc || "");
+      if (field === "dc") return wrap(store.dc || "");
+      return "";
+    }
+    return full;
+  });
+}
+
+function renderExtraDates() {
+  const tpl = getTemplate();
+  const names = (tpl && tpl.extraDates) || [];
+  Object.keys(extraDateValues).forEach(k => { if (!names.includes(k)) delete extraDateValues[k]; });
+  extraDatesContainer.innerHTML = "";
+  names.forEach(name => {
+    const wrap = document.createElement("div");
+    const label = document.createElement("label");
+    label.textContent = name;
+    const input = document.createElement("input");
+    input.type = "date";
+    input.value = extraDateValues[name] || "";
+    input.addEventListener("change", () => {
+      extraDateValues[name] = input.value;
+      renderPreview();
+    });
+    if (!extraDateValues[name]) {
+      input.value = todayISO();
+      extraDateValues[name] = input.value;
+    }
+    wrap.appendChild(label);
+    wrap.appendChild(input);
+    extraDatesContainer.appendChild(wrap);
+  });
+}
+
+function renderPreview() {
+  const tpl = getTemplate();
+  previewSubjectEl.textContent = tpl ? fillPlaceholders(tpl.subject || "") : "(no template selected)";
+  if (!tpl) {
+    previewBodyEl.textContent = "(no template selected)";
+  } else {
+    const html = looksLikeHtml(tpl.body) ? tpl.body : plainTextToHtml(tpl.body || "");
+    previewBodyEl.innerHTML = fillPlaceholders(html, { html: true });
+  }
+  refreshSendButtons();
+}
+
+function renderContactPickers() {
+  [addRequiredContactEl, addOptionalContactEl].forEach(sel => {
+    sel.innerHTML = '<option value="">+ contact</option>';
+    state.contacts.forEach(c => {
+      if (!c.email) return;
+      const opt = document.createElement("option");
+      opt.value = c.email;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function appendEmailToField(inputEl, email) {
+  if (!email) return;
+  const current = inputEl.value.trim();
+  if (current.split(/[,;]/).map(s => s.trim()).includes(email)) return;
+  inputEl.value = current ? `${current.replace(/,\s*$/, "")}, ${email}` : email;
+  inputEl.dispatchEvent(new Event("input"));
+}
+
+function removeEmailFromField(inputEl, email) {
+  if (!email) return;
+  const parts = inputEl.value.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+  const filtered = parts.filter(p => p !== email);
+  if (filtered.length === parts.length) return;
+  inputEl.value = filtered.join(", ");
+  inputEl.dispatchEvent(new Event("input"));
+}
+
+function resolveAttendees(text) {
+  if (!text) return [];
+  return fillPlaceholders(text)
+    .split(/[,;]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function buildOutlookUrl() {
+  const tpl = getTemplate();
+  if (!tpl) return null;
+  if (!dateEl.value) return null;
+  const subject = fillPlaceholders(tpl.subject || "");
+  const sourceHtml = looksLikeHtml(tpl.body) ? tpl.body : plainTextToHtml(tpl.body || "");
+  const bodyHtml = fillPlaceholders(sourceHtml, { html: true });
+  const url = new URL("https://outlook.office.com/calendar/0/deeplink/compose");
+  url.searchParams.set("path", "/calendar/action/compose");
+  url.searchParams.set("rru", "addevent");
+  url.searchParams.set("subject", subject);
+  url.searchParams.set("body", bodyHtml);
+  url.searchParams.set("startdt", dateEl.value);
+  url.searchParams.set("enddt", dateEl.value);
+  url.searchParams.set("allday", "true");
+  const required = resolveAttendees(composeRequiredEl.value);
+  const optional = resolveAttendees(composeOptionalEl.value);
+  const all = [...required, ...optional];
+  if (all.length) url.searchParams.set("to", all.join(";"));
+  return url.toString();
+}
+
+function buildICS() {
+  const tpl = getTemplate();
+  if (!tpl || !dateEl.value) return null;
+  const subject = fillPlaceholders(tpl.subject || "");
+  const sourceHtml = looksLikeHtml(tpl.body) ? tpl.body : plainTextToHtml(tpl.body || "");
+  const filledHtml = fillPlaceholders(sourceHtml, { html: true });
+  const bodyText = htmlToText(filledHtml);
+  const icsEscape = s => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
+  const body = icsEscape(bodyText);
+  const altDesc = icsEscape(filledHtml);
+  const start = dateEl.value.replace(/-/g, "");
+  const next = new Date(dateEl.value);
+  next.setDate(next.getDate() + 1);
+  const end = `${next.getFullYear()}${String(next.getMonth()+1).padStart(2,"0")}${String(next.getDate()).padStart(2,"0")}`;
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const required = resolveAttendees(composeRequiredEl.value);
+  const optional = resolveAttendees(composeOptionalEl.value);
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Outlook Composer//EN",
+    "BEGIN:VEVENT",
+    `UID:${crypto.randomUUID()}`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${start}`,
+    `DTEND;VALUE=DATE:${end}`,
+    `SUMMARY:${subject}`,
+    `DESCRIPTION:${body}`,
+    `X-ALT-DESC;FMTTYPE=text/html:${altDesc}`
+  ];
+  required.forEach(addr => lines.push(`ATTENDEE;ROLE=REQ-PARTICIPANT;RSVP=TRUE:mailto:${addr}`));
+  optional.forEach(addr => lines.push(`ATTENDEE;ROLE=OPT-PARTICIPANT;RSVP=TRUE:mailto:${addr}`));
+  lines.push("END:VEVENT", "END:VCALENDAR");
+  return lines.join("\r\n");
+}
+
+function validateCompose() {
+  if (!getTemplate()) return "Pick a template first.";
+  if (!dateEl.value) return "Pick a date first.";
+  if (!getContact()) return "Pick a contact before sending.";
+  if (!getPrimaryStore()) return "Pick a store before sending.";
+  return null;
+}
+
+function refreshSendButtons() {
+  const err = validateCompose();
+  ["open-outlook", "copy-link", "download-ics"].forEach(id => {
+    document.getElementById(id).disabled = !!err;
+  });
+  const status = document.getElementById("send-status");
+  status.textContent = err || "";
+  status.hidden = !err;
+}
+
+function resetForNextEvent() {
+  clearSelectedStore();
+  clearSelectedContact();
+  state.composeRequired = "";
+  state.composeOptional = "";
+  composeRequiredEl.value = "";
+  composeOptionalEl.value = "";
+  Object.keys(extraDateValues).forEach(k => delete extraDateValues[k]);
+  dateEl.value = todayISO();
+  storeSearchEl.value = "";
+  contactSearchEl.value = "";
+  save();
+  renderExtraDates();
+  renderPreview();
+}
+
+const toastEl = document.getElementById("toast");
+let toastTimer = null;
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2000);
+}
+
+document.getElementById("open-outlook").addEventListener("click", () => {
+  const err = validateCompose();
+  if (err) { alert(err); return; }
+  const url = buildOutlookUrl();
+  if (!url) return;
+  window.open(url, "_blank", "noopener");
+  showToast("Opened in Outlook ✓");
+  resetForNextEvent();
+});
+
+document.getElementById("copy-link").addEventListener("click", async () => {
+  const err = validateCompose();
+  if (err) { alert(err); return; }
+  const url = buildOutlookUrl();
+  if (!url) return;
+  await navigator.clipboard.writeText(url);
+  showToast("Link copied ✓");
+});
+
+document.getElementById("download-ics").addEventListener("click", () => {
+  const err = validateCompose();
+  if (err) { alert(err); return; }
+  const ics = buildICS();
+  if (!ics) return;
+  const blob = new Blob([ics], { type: "text/calendar" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  const tpl = getTemplate();
+  a.download = `${(tpl.name || "event").replace(/[^\w\-]+/g, "_")}.ics`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast("Downloaded .ics ✓");
+  resetForNextEvent();
+});
+
+document.getElementById("select-template").addEventListener("change", e => {
+  state.selectedTemplateId = e.target.value || null;
+  save(); renderExtraDates(); renderPreview();
+});
+dateEl.addEventListener("change", () => renderPreview());
+
+composeRequiredEl.addEventListener("input", () => { state.composeRequired = composeRequiredEl.value; save(); });
+composeOptionalEl.addEventListener("input", () => { state.composeOptional = composeOptionalEl.value; save(); });
+
+addRequiredContactEl.addEventListener("change", e => {
+  appendEmailToField(composeRequiredEl, e.target.value);
+  e.target.value = "";
+});
+addOptionalContactEl.addEventListener("change", e => {
+  appendEmailToField(composeOptionalEl, e.target.value);
+  e.target.value = "";
+});
+
+// ---------- Contact combobox ----------
+const contactSearchEl = document.getElementById("contact-search");
+const contactMenuEl = document.getElementById("contact-menu");
+const contactClearEl = document.getElementById("contact-clear");
+let contactMenuActiveIdx = -1;
+let contactMenuMatches = [];
+
+function contactDisplay(c) {
+  return c.email ? `${c.name} — ${c.email}` : c.name;
+}
+
+function renderSelectedContact() {
+  const c = getContact();
+  contactSearchEl.value = c ? contactDisplay(c) : "";
+  contactClearEl.hidden = !c;
+}
+
+function selectContact(id) {
+  const c = state.contacts.find(x => x.id === id);
+  if (!c) return;
+  if (state.selectedContactId === c.id) return;
+  const previous = getContact();
+  if (previous && previous.email) {
+    removeEmailFromField(composeRequiredEl, previous.email);
+    removeEmailFromField(composeOptionalEl, previous.email);
+  }
+  state.selectedContactId = c.id;
+  if (c.email) appendEmailToField(composeOptionalEl, c.email);
+  save();
+  renderSelectedContact();
+  renderPreview();
+}
+
+function clearSelectedContact() {
+  const previous = getContact();
+  if (!previous) return;
+  if (previous.email) {
+    removeEmailFromField(composeRequiredEl, previous.email);
+    removeEmailFromField(composeOptionalEl, previous.email);
+  }
+  state.selectedContactId = null;
+  save();
+  renderSelectedContact();
+  renderPreview();
+}
+
+function rankContact(c, q) {
+  const name = (c.name || "").toLowerCase();
+  const email = (c.email || "").toLowerCase();
+  if (name.startsWith(q)) return 0;
+  if (email.startsWith(q)) return 1;
+  if (name.includes(q)) return 2;
+  if (email.includes(q)) return 3;
+  return -1;
+}
+
+function openContactMenu(query) {
+  const q = (query || "").trim().toLowerCase();
+  let matches;
+  if (!q) {
+    matches = state.contacts.slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  } else {
+    matches = state.contacts
+      .map(c => ({ c, r: rankContact(c, q) }))
+      .filter(x => x.r >= 0)
+      .sort((a, b) => a.r - b.r || (a.c.name || "").localeCompare(b.c.name || ""))
+      .map(x => x.c);
+  }
+  contactMenuMatches = matches.slice(0, 100);
+  contactMenuActiveIdx = contactMenuMatches.length ? 0 : -1;
+  renderContactMenu();
+  contactMenuEl.hidden = false;
+}
+
+function closeContactMenu() {
+  contactMenuEl.hidden = true;
+  contactMenuMatches = [];
+  contactMenuActiveIdx = -1;
+}
+
+function renderContactMenu() {
+  contactMenuEl.innerHTML = "";
+  if (!contactMenuMatches.length) {
+    const empty = document.createElement("div");
+    empty.className = "combobox-empty";
+    empty.textContent = state.contacts.length ? "No matching contacts." : "Add a contact first (Contacts panel).";
+    contactMenuEl.appendChild(empty);
+    return;
+  }
+  contactMenuMatches.forEach((c, i) => {
+    const item = document.createElement("div");
+    item.className = "combobox-item" + (i === contactMenuActiveIdx ? " active" : "");
+    const name = document.createElement("span");
+    name.className = "ci-name";
+    name.textContent = c.name || "(unnamed)";
+    const meta = document.createElement("span");
+    meta.className = "ci-meta";
+    meta.textContent = c.email || (c.phone || "");
+    item.appendChild(name);
+    item.appendChild(meta);
+    item.addEventListener("mousedown", e => {
+      e.preventDefault();
+      selectContact(c.id);
+      closeContactMenu();
+      contactSearchEl.blur();
+    });
+    contactMenuEl.appendChild(item);
+  });
+}
+
+contactSearchEl.addEventListener("focus", () => {
+  if (state.selectedContactId) contactSearchEl.select();
+  openContactMenu(state.selectedContactId ? "" : contactSearchEl.value);
+});
+contactSearchEl.addEventListener("input", () => {
+  openContactMenu(contactSearchEl.value);
+});
+contactSearchEl.addEventListener("blur", () => {
+  setTimeout(() => {
+    closeContactMenu();
+    renderSelectedContact();
+  }, 120);
+});
+contactSearchEl.addEventListener("keydown", e => {
+  if (contactMenuEl.hidden) return;
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    contactMenuActiveIdx = Math.min(contactMenuActiveIdx + 1, contactMenuMatches.length - 1);
+    renderContactMenu();
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    contactMenuActiveIdx = Math.max(contactMenuActiveIdx - 1, 0);
+    renderContactMenu();
+  } else if (e.key === "Enter") {
+    if (contactMenuActiveIdx >= 0 && contactMenuMatches[contactMenuActiveIdx]) {
+      e.preventDefault();
+      selectContact(contactMenuMatches[contactMenuActiveIdx].id);
+      closeContactMenu();
+      contactSearchEl.blur();
+    }
+  } else if (e.key === "Escape") {
+    closeContactMenu();
+    contactSearchEl.blur();
+  }
+});
+contactClearEl.addEventListener("click", () => {
+  clearSelectedContact();
+  contactSearchEl.focus();
+});
+
+// ---------- Stores ----------
+const storeSearchEl = document.getElementById("store-search");
+const storeMenuEl = document.getElementById("store-menu");
+const storeClearEl = document.getElementById("store-clear");
+const storeListEl = document.getElementById("store-list");
+const storeCountEl = document.getElementById("store-count");
+const storeFileEl = document.getElementById("store-file");
+let storeMenuActiveIdx = -1;
+let storeMenuMatches = [];
+
+function findStore(name) {
+  if (!name) return null;
+  const lower = name.trim().toLowerCase();
+  return state.stores.find(s => (s.store || "").toLowerCase() === lower) || null;
+}
+
+function selectStore(name) {
+  const store = findStore(name);
+  if (!store) return false;
+  if (state.addedStoreName === store.store) return false;
+  if (state.addedStoreName) {
+    const prev = findStore(state.addedStoreName);
+    if (prev) {
+      if (prev.bc) removeEmailFromField(composeRequiredEl, prev.bc);
+      if (prev.dc) removeEmailFromField(composeOptionalEl, prev.dc);
+    }
+  }
+  state.addedStoreName = store.store;
+  if (store.bc) appendEmailToField(composeRequiredEl, store.bc);
+  if (store.dc) appendEmailToField(composeOptionalEl, store.dc);
+  save();
+  renderSelectedStore();
+  renderPreview();
+  return true;
+}
+
+function clearSelectedStore() {
+  if (!state.addedStoreName) return;
+  const prev = findStore(state.addedStoreName);
+  if (prev) {
+    if (prev.bc) removeEmailFromField(composeRequiredEl, prev.bc);
+    if (prev.dc) removeEmailFromField(composeOptionalEl, prev.dc);
+  }
+  state.addedStoreName = null;
+  save();
+  renderSelectedStore();
+  renderPreview();
+}
+
+function storeDisplay(s) {
+  return s.number ? `#${s.number} — ${s.store}` : s.store;
+}
+
+function renderSelectedStore() {
+  const store = state.addedStoreName ? findStore(state.addedStoreName) : null;
+  storeSearchEl.value = store ? storeDisplay(store) : "";
+  storeClearEl.hidden = !store;
+}
+
+function renderStores() {
+  storeCountEl.textContent = state.stores.length
+    ? `${state.stores.length} store${state.stores.length === 1 ? "" : "s"} loaded.`
+    : "No stores loaded.";
+  storeListEl.innerHTML = "";
+  state.stores.slice(0, 50).forEach(s => {
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML = `<span class="name"></span><span class="meta"></span>`;
+    div.querySelector(".name").textContent = storeDisplay(s);
+    div.querySelector(".meta").textContent = `BC: ${s.bc || "—"}  ·  DC: ${s.dc || "—"}`;
+    div.addEventListener("click", () => selectStore(s.store));
+    storeListEl.appendChild(div);
+  });
+  if (state.stores.length > 50) {
+    const more = document.createElement("div");
+    more.className = "empty";
+    more.textContent = `…and ${state.stores.length - 50} more (use the search box above).`;
+    storeListEl.appendChild(more);
+  }
+}
+
+function rankStore(s, q) {
+  const name = (s.store || "").toLowerCase();
+  const number = (s.number || "").toString().toLowerCase();
+  if (name.startsWith(q)) return 0;
+  if (number.startsWith(q)) return 1;
+  if (name.includes(q)) return 2;
+  if (number.includes(q)) return 3;
+  return -1;
+}
+
+function openStoreMenu(query) {
+  const q = (query || "").trim().toLowerCase();
+  let matches;
+  if (!q) {
+    matches = state.stores.slice().sort((a, b) => (a.store || "").localeCompare(b.store || ""));
+  } else {
+    matches = state.stores
+      .map(s => ({ s, r: rankStore(s, q) }))
+      .filter(x => x.r >= 0)
+      .sort((a, b) => a.r - b.r || (a.s.store || "").localeCompare(b.s.store || ""))
+      .map(x => x.s);
+  }
+  storeMenuMatches = matches.slice(0, 100);
+  storeMenuActiveIdx = storeMenuMatches.length ? 0 : -1;
+  renderStoreMenu();
+  storeMenuEl.hidden = false;
+}
+
+function closeStoreMenu() {
+  storeMenuEl.hidden = true;
+  storeMenuMatches = [];
+  storeMenuActiveIdx = -1;
+}
+
+function renderStoreMenu() {
+  storeMenuEl.innerHTML = "";
+  if (!storeMenuMatches.length) {
+    const empty = document.createElement("div");
+    empty.className = "combobox-empty";
+    empty.textContent = state.stores.length ? "No matching stores." : "Upload an Excel/CSV first (Stores panel).";
+    storeMenuEl.appendChild(empty);
+    return;
+  }
+  storeMenuMatches.forEach((s, i) => {
+    const item = document.createElement("div");
+    item.className = "combobox-item" + (i === storeMenuActiveIdx ? " active" : "");
+    const name = document.createElement("span");
+    name.className = "ci-name";
+    name.textContent = storeDisplay(s);
+    const meta = document.createElement("span");
+    meta.className = "ci-meta";
+    meta.textContent = `BC: ${s.bc || "—"}  ·  DC: ${s.dc || "—"}`;
+    item.appendChild(name);
+    item.appendChild(meta);
+    item.addEventListener("mousedown", e => {
+      e.preventDefault();
+      selectStore(s.store);
+      closeStoreMenu();
+      storeSearchEl.blur();
+    });
+    storeMenuEl.appendChild(item);
+  });
+}
+
+storeSearchEl.addEventListener("focus", () => {
+  if (state.addedStoreName) storeSearchEl.select();
+  openStoreMenu(state.addedStoreName ? "" : storeSearchEl.value);
+});
+storeSearchEl.addEventListener("input", () => {
+  openStoreMenu(storeSearchEl.value);
+});
+storeSearchEl.addEventListener("blur", () => {
+  setTimeout(() => {
+    closeStoreMenu();
+    renderSelectedStore();
+  }, 120);
+});
+storeSearchEl.addEventListener("keydown", e => {
+  if (storeMenuEl.hidden) return;
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    storeMenuActiveIdx = Math.min(storeMenuActiveIdx + 1, storeMenuMatches.length - 1);
+    renderStoreMenu();
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    storeMenuActiveIdx = Math.max(storeMenuActiveIdx - 1, 0);
+    renderStoreMenu();
+  } else if (e.key === "Enter") {
+    if (storeMenuActiveIdx >= 0 && storeMenuMatches[storeMenuActiveIdx]) {
+      e.preventDefault();
+      selectStore(storeMenuMatches[storeMenuActiveIdx].store);
+      closeStoreMenu();
+      storeSearchEl.blur();
+    }
+  } else if (e.key === "Escape") {
+    closeStoreMenu();
+    storeSearchEl.blur();
+  }
+});
+storeClearEl.addEventListener("click", () => {
+  clearSelectedStore();
+  storeSearchEl.focus();
+});
+
+storeFileEl.addEventListener("change", () => {
+  const file = storeFileEl.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: "array", cellDates: false });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
+      const stores = [];
+      rows.forEach(row => {
+        const keys = Object.keys(row);
+        const get = (...labels) => {
+          for (const label of labels) {
+            const k = keys.find(k => k.trim().toLowerCase().replace(/[\s_-]/g, "") === label);
+            if (k) return String(row[k]).trim();
+          }
+          return "";
+        };
+        const store = get("store", "storename");
+        const bc = get("bc", "bcemail");
+        const dc = get("dc", "dcemail");
+        const number = get("number", "storenumber", "storenum", "no", "nr");
+        if (store) stores.push({ store, bc, dc, number });
+      });
+      if (!stores.length) { alert("No rows found. Make sure the file has Store, BC, DC columns."); return; }
+      state.stores = stores;
+      save();
+      renderStores();
+    } catch (err) {
+      alert("Failed to parse file: " + err.message);
+    }
+    storeFileEl.value = "";
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+document.getElementById("clear-stores").addEventListener("click", () => {
+  if (!state.stores.length) return;
+  if (!confirm(`Clear all ${state.stores.length} stores?`)) return;
+  clearSelectedStore();
+  state.stores = [];
+  save();
+  renderStores();
+});
+
+// ---------- Rich text toolbar ----------
+let savedRange = null;
+
+document.addEventListener("selectionchange", () => {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount) {
+    const node = sel.anchorNode;
+    if (node && tplBodyEl.contains(node)) {
+      savedRange = sel.getRangeAt(0).cloneRange();
+    }
+  }
+});
+
+function restoreSelection() {
+  if (!savedRange) return false;
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(savedRange);
+  return true;
+}
+
+function execWithSelection(cmd, value) {
+  tplBodyEl.focus();
+  restoreSelection();
+  try { document.execCommand("styleWithCSS", false, true); } catch {}
+  document.execCommand(cmd, false, value === undefined ? null : value);
+}
+
+document.querySelectorAll("#tpl-body-toolbar button").forEach(btn => {
+  btn.addEventListener("mousedown", e => e.preventDefault());
+  btn.addEventListener("click", () => {
+    const cmd = btn.dataset.cmd;
+    if (cmd === "createLink") {
+      const url = prompt("Link URL:", "https://");
+      if (!url) return;
+      execWithSelection("createLink", url);
+    } else {
+      execWithSelection(cmd);
+    }
+    updateToolbarState();
+  });
+});
+
+document.querySelectorAll("#tpl-body-toolbar input[type='color']").forEach(input => {
+  const swatch = input.parentElement.querySelector(".swatch");
+  if (swatch) swatch.style.color = input.value;
+  input.addEventListener("input", e => {
+    if (swatch) swatch.style.color = e.target.value;
+    execWithSelection(input.dataset.cmd, e.target.value);
+  });
+});
+
+function updateToolbarState() {
+  document.querySelectorAll("#tpl-body-toolbar button").forEach(btn => {
+    const cmd = btn.dataset.cmd;
+    if (["bold", "italic", "underline", "insertUnorderedList", "insertOrderedList"].includes(cmd)) {
+      try { btn.classList.toggle("active", document.queryCommandState(cmd)); } catch {}
+    }
+  });
+}
+
+["keyup", "mouseup", "focus"].forEach(ev =>
+  tplBodyEl.addEventListener(ev, updateToolbarState)
+);
+
+// ---------- Tabs ----------
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const target = btn.dataset.tab;
+    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.dataset.panel === target));
+  });
+});
+
+// ---------- Excel import/export ----------
+function downloadXlsx(rows, sheetName, filename) {
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+
+function pickXlsxFile(callback) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".xlsx,.xls,.csv";
+  input.addEventListener("change", () => {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: "array", cellDates: false });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false });
+        callback(rows);
+      } catch (err) { alert("Failed to read file: " + err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  input.click();
+}
+
+function rowGet(row, ...labels) {
+  const keys = Object.keys(row);
+  for (const label of labels) {
+    const k = keys.find(k => k.trim().toLowerCase() === label);
+    if (k) return String(row[k]).trim();
+  }
+  return "";
+}
+
+document.getElementById("tpl-export").addEventListener("click", () => {
+  if (!state.templates.length) { alert("No templates to export."); return; }
+  const rows = state.templates.map(t => ({
+    Name: t.name || "",
+    Subject: t.subject || "",
+    Body: t.body || "",
+    ExtraDates: (t.extraDates || []).join(", ")
+  }));
+  downloadXlsx(rows, "Templates", "templates.xlsx");
+});
+
+document.getElementById("tpl-import").addEventListener("click", () => {
+  pickXlsxFile(rows => {
+    const templates = rows.map(row => ({
+      id: crypto.randomUUID(),
+      name: rowGet(row, "name"),
+      subject: rowGet(row, "subject"),
+      body: rowGet(row, "body"),
+      extraDates: parseExtraDates(rowGet(row, "extradates", "extra dates", "extra date pickers"))
+    })).filter(t => t.name);
+    if (!templates.length) { alert("No valid rows. Need at least a Name column."); return; }
+    if (!confirm(`Replace ${state.templates.length} templates with ${templates.length} from file?`)) return;
+    state.templates = templates;
+    state.editingTemplateId = null;
+    state.selectedTemplateId = templates[0].id;
+    clearTplForm();
+    save(); renderAll();
+  });
+});
+
+document.getElementById("ct-export").addEventListener("click", () => {
+  if (!state.contacts.length) { alert("No contacts to export."); return; }
+  const customKeys = new Set();
+  state.contacts.forEach(c => Object.keys(c.custom || {}).forEach(k => customKeys.add(k)));
+  const rows = state.contacts.map(c => {
+    const row = { Name: c.name || "", Email: c.email || "", Phone: c.phone || "" };
+    customKeys.forEach(k => row[k] = (c.custom && c.custom[k]) || "");
+    return row;
+  });
+  downloadXlsx(rows, "Contacts", "contacts.xlsx");
+});
+
+document.getElementById("ct-import").addEventListener("click", () => {
+  pickXlsxFile(rows => {
+    const reserved = new Set(["name", "email", "phone"]);
+    const contacts = rows.map(row => {
+      const name = rowGet(row, "name");
+      const email = rowGet(row, "email");
+      const phone = rowGet(row, "phone");
+      const custom = {};
+      Object.keys(row).forEach(k => {
+        const lk = k.trim().toLowerCase();
+        if (reserved.has(lk)) return;
+        const v = String(row[k]).trim();
+        if (v) custom[k.trim()] = v;
+      });
+      return { id: crypto.randomUUID(), name, email, phone, custom };
+    }).filter(c => c.name);
+    if (!contacts.length) { alert("No valid rows. Need at least a Name column."); return; }
+    if (!confirm(`Replace ${state.contacts.length} contacts with ${contacts.length} from file?`)) return;
+    state.contacts = contacts;
+    state.editingContactId = null;
+    state.selectedContactId = null;
+    clearCtForm();
+    save(); renderAll();
+  });
+});
+
+// ---------- Init ----------
+function renderAll() {
+  renderTemplates();
+  renderContacts();
+  renderContactPickers();
+  renderExtraDates();
+  renderStores();
+  renderSelectedStore();
+  renderPreview();
+}
+
+dateEl.value = todayISO();
+composeRequiredEl.value = state.composeRequired || "";
+composeOptionalEl.value = state.composeOptional || "";
+renderAll();
+</script>
+</body>
+</html>
