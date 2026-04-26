@@ -224,6 +224,9 @@
   button.danger:hover { background: var(--danger-bg); }
   .combobox { position: relative; }
   .combobox input { padding-right: 32px; }
+  .combobox-attendee { width: 140px; flex-shrink: 0; }
+  .combobox-attendee input { padding-right: 10px; }
+  .combobox-attendee .combobox-menu { left: auto; right: 0; min-width: 240px; }
   .combobox-clear {
     position: absolute;
     right: 6px;
@@ -386,8 +389,15 @@
         <label>Event date</label>
         <input type="date" id="event-date" />
       </div>
+      <div>
+        <label>Extra date</label>
+        <input type="date" id="event-extra-date" />
+      </div>
+      <div>
+        <label>Number</label>
+        <input type="number" id="event-number" placeholder="e.g. 42" />
+      </div>
     </div>
-    <div id="extra-dates-container" class="form-grid field-group"></div>
 
     <div class="field-group">
       <label>Store <span class="hint" style="font-weight:400">— BC → required, DC → optional</span></label>
@@ -403,14 +413,20 @@
         <label>Required attendees</label>
         <div class="row">
           <input id="compose-required" placeholder="comma-separated emails" />
-          <select id="add-required-contact" style="max-width:120px"><option value="">+ contact</option></select>
+          <div class="combobox combobox-attendee" id="add-required-contact">
+            <input autocomplete="off" placeholder="+ contact" />
+            <div class="combobox-menu" hidden></div>
+          </div>
         </div>
       </div>
       <div>
         <label>Optional attendees</label>
         <div class="row">
           <input id="compose-optional" placeholder="comma-separated emails" />
-          <select id="add-optional-contact" style="max-width:120px"><option value="">+ contact</option></select>
+          <div class="combobox combobox-attendee" id="add-optional-contact">
+            <input autocomplete="off" placeholder="+ contact" />
+            <div class="combobox-menu" hidden></div>
+          </div>
         </div>
       </div>
     </div>
@@ -471,9 +487,7 @@
         <button type="button" data-cmd="removeFormat" title="Clear formatting">✕</button>
       </div>
       <div class="rt-editor" id="tpl-body" contenteditable="true" data-placeholder="e.g. Send a card to {contact.name} on {date}."></div>
-      <label>Extra date pickers (comma-separated names)</label>
-      <input id="tpl-extra-dates" placeholder="e.g. deadline, followUp" />
-      <p class="hint">Placeholders: <code>{date}</code>, <code>{date.name}</code>, <code>{contact.name|email|phone}</code>, <code>{store.name|number}</code>.</p>
+      <p class="hint">Placeholders: <code>{date}</code>, <code>{date2}</code>, <code>{number}</code>, <code>{contact.name|email|phone}</code>, <code>{store.name|number}</code>.</p>
       <div class="actions">
         <button class="primary" id="tpl-save">Save</button>
         <button id="tpl-new">New</button>
@@ -530,8 +544,7 @@ const defaultState = {
       id: crypto.randomUUID(),
       name: "Store visit",
       subject: "{store.number} — {store.name} visit on {date}",
-      body: "Visiting {store.name} (#{store.number}) on {date}.",
-      extraDates: []
+      body: "Visiting {store.name} (#{store.number}) on {date}."
     }
   ],
   composeRequired: "",
@@ -568,23 +581,10 @@ const tplListEl = document.getElementById("template-list");
 const tplNameEl = document.getElementById("tpl-name");
 const tplSubjectEl = document.getElementById("tpl-subject");
 const tplBodyEl = document.getElementById("tpl-body");
-const tplExtraDatesEl = document.getElementById("tpl-extra-dates");
 
 const composeRequiredEl = document.getElementById("compose-required");
 const composeOptionalEl = document.getElementById("compose-optional");
-const addRequiredContactEl = document.getElementById("add-required-contact");
-const addOptionalContactEl = document.getElementById("add-optional-contact");
 const previewSubjectEl = document.getElementById("preview-subject");
-
-const extraDateValues = {};
-const extraDatesContainer = document.getElementById("extra-dates-container");
-
-function parseExtraDates(str) {
-  return (str || "")
-    .split(",")
-    .map(s => s.trim())
-    .filter(Boolean);
-}
 
 function renderTemplates() {
   tplListEl.innerHTML = "";
@@ -625,7 +625,6 @@ function loadTplForm(t) {
   tplNameEl.value = t.name;
   tplSubjectEl.value = t.subject || "";
   tplBodyEl.innerHTML = looksLikeHtml(t.body) ? (t.body || "") : plainTextToHtml(t.body || "");
-  tplExtraDatesEl.value = (t.extraDates || []).join(", ");
   renderTemplates();
 }
 
@@ -634,15 +633,13 @@ function clearTplForm() {
   tplNameEl.value = "";
   tplSubjectEl.value = "";
   tplBodyEl.innerHTML = "";
-  tplExtraDatesEl.value = "";
 }
 
 document.getElementById("tpl-save").addEventListener("click", () => {
   const data = {
     name: tplNameEl.value.trim(),
     subject: tplSubjectEl.value,
-    body: tplBodyEl.innerHTML,
-    extraDates: parseExtraDates(tplExtraDatesEl.value)
+    body: tplBodyEl.innerHTML
   };
   if (!data.name) { alert("Template needs a name."); return; }
   if (state.editingTemplateId) {
@@ -769,6 +766,8 @@ document.getElementById("ct-new").addEventListener("click", () => {
 
 // ---------- Compose ----------
 const dateEl = document.getElementById("event-date");
+const extraDateEl = document.getElementById("event-extra-date");
+const numberEl = document.getElementById("event-number");
 const previewBodyEl = document.getElementById("preview-body");
 
 function todayISO() {
@@ -829,13 +828,9 @@ function fillPlaceholders(text, opts = {}) {
     key = key.trim();
     if (key === "date") return wrap(formattedDate);
     if (key === "date:iso") return wrap(dateEl.value || "");
-    if (key.startsWith("date.")) {
-      const rest = key.slice("date.".length);
-      const isIso = rest.endsWith(":iso");
-      const name = isIso ? rest.slice(0, -":iso".length) : rest;
-      const iso = extraDateValues[name] || "";
-      return wrap(isIso ? iso : formatDate(iso));
-    }
+    if (key === "date2") return wrap(formatDate(extraDateEl.value));
+    if (key === "date2:iso") return wrap(extraDateEl.value || "");
+    if (key === "number") return wrap(numberEl.value || "");
     if (key.startsWith("contact.")) {
       const field = key.slice("contact.".length);
       if (!contact) return full;
@@ -857,32 +852,6 @@ function fillPlaceholders(text, opts = {}) {
   });
 }
 
-function renderExtraDates() {
-  const tpl = getTemplate();
-  const names = (tpl && tpl.extraDates) || [];
-  Object.keys(extraDateValues).forEach(k => { if (!names.includes(k)) delete extraDateValues[k]; });
-  extraDatesContainer.innerHTML = "";
-  names.forEach(name => {
-    const wrap = document.createElement("div");
-    const label = document.createElement("label");
-    label.textContent = name;
-    const input = document.createElement("input");
-    input.type = "date";
-    input.value = extraDateValues[name] || "";
-    input.addEventListener("change", () => {
-      extraDateValues[name] = input.value;
-      renderPreview();
-    });
-    if (!extraDateValues[name]) {
-      input.value = todayISO();
-      extraDateValues[name] = input.value;
-    }
-    wrap.appendChild(label);
-    wrap.appendChild(input);
-    extraDatesContainer.appendChild(wrap);
-  });
-}
-
 function renderPreview() {
   const tpl = getTemplate();
   previewSubjectEl.textContent = tpl ? fillPlaceholders(tpl.subject || "") : "(no template selected)";
@@ -893,19 +862,6 @@ function renderPreview() {
     previewBodyEl.innerHTML = fillPlaceholders(html, { html: true });
   }
   refreshSendButtons();
-}
-
-function renderContactPickers() {
-  [addRequiredContactEl, addOptionalContactEl].forEach(sel => {
-    sel.innerHTML = '<option value="">+ contact</option>';
-    state.contacts.forEach(c => {
-      if (!c.email) return;
-      const opt = document.createElement("option");
-      opt.value = c.email;
-      opt.textContent = c.name;
-      sel.appendChild(opt);
-    });
-  });
 }
 
 function appendEmailToField(inputEl, email) {
@@ -1016,12 +972,12 @@ function resetForNextEvent() {
   state.composeOptional = "";
   composeRequiredEl.value = "";
   composeOptionalEl.value = "";
-  Object.keys(extraDateValues).forEach(k => delete extraDateValues[k]);
   dateEl.value = todayISO();
+  extraDateEl.value = "";
+  numberEl.value = "";
   storeSearchEl.value = "";
   contactSearchEl.value = "";
   save();
-  renderExtraDates();
   renderPreview();
 }
 
@@ -1071,21 +1027,110 @@ document.getElementById("download-ics").addEventListener("click", () => {
 
 document.getElementById("select-template").addEventListener("change", e => {
   state.selectedTemplateId = e.target.value || null;
-  save(); renderExtraDates(); renderPreview();
+  save(); renderPreview();
 });
 dateEl.addEventListener("change", () => renderPreview());
+extraDateEl.addEventListener("change", () => renderPreview());
+numberEl.addEventListener("input", () => renderPreview());
 
 composeRequiredEl.addEventListener("input", () => { state.composeRequired = composeRequiredEl.value; save(); });
 composeOptionalEl.addEventListener("input", () => { state.composeOptional = composeOptionalEl.value; save(); });
 
-addRequiredContactEl.addEventListener("change", e => {
-  appendEmailToField(composeRequiredEl, e.target.value);
-  e.target.value = "";
-});
-addOptionalContactEl.addEventListener("change", e => {
-  appendEmailToField(composeOptionalEl, e.target.value);
-  e.target.value = "";
-});
+function setupAttendeeCombobox(comboboxEl, targetInputEl) {
+  const inputEl = comboboxEl.querySelector("input");
+  const menuEl = comboboxEl.querySelector(".combobox-menu");
+  let activeIdx = -1;
+  let matches = [];
+
+  function render() {
+    menuEl.innerHTML = "";
+    if (!matches.length) {
+      const empty = document.createElement("div");
+      empty.className = "combobox-empty";
+      empty.textContent = state.contacts.some(c => c.email)
+        ? "No matching contacts."
+        : "Add a contact with an email first.";
+      menuEl.appendChild(empty);
+      return;
+    }
+    matches.forEach((c, i) => {
+      const item = document.createElement("div");
+      item.className = "combobox-item" + (i === activeIdx ? " active" : "");
+      const name = document.createElement("span");
+      name.className = "ci-name";
+      name.textContent = c.name || "(unnamed)";
+      const meta = document.createElement("span");
+      meta.className = "ci-meta";
+      meta.textContent = c.email;
+      item.appendChild(name);
+      item.appendChild(meta);
+      item.addEventListener("mousedown", e => {
+        e.preventDefault();
+        pick(c);
+      });
+      menuEl.appendChild(item);
+    });
+  }
+
+  function open(query) {
+    const q = (query || "").trim().toLowerCase();
+    const eligible = state.contacts.filter(c => c.email);
+    let list;
+    if (!q) {
+      list = eligible.slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    } else {
+      list = eligible
+        .map(c => ({ c, r: rankContact(c, q) }))
+        .filter(x => x.r >= 0)
+        .sort((a, b) => a.r - b.r || (a.c.name || "").localeCompare(b.c.name || ""))
+        .map(x => x.c);
+    }
+    matches = list.slice(0, 100);
+    activeIdx = matches.length ? 0 : -1;
+    render();
+    menuEl.hidden = false;
+  }
+
+  function close() {
+    menuEl.hidden = true;
+    matches = [];
+    activeIdx = -1;
+  }
+
+  function pick(c) {
+    appendEmailToField(targetInputEl, c.email);
+    inputEl.value = "";
+    close();
+    inputEl.blur();
+  }
+
+  inputEl.addEventListener("focus", () => open(inputEl.value));
+  inputEl.addEventListener("input", () => open(inputEl.value));
+  inputEl.addEventListener("blur", () => setTimeout(close, 120));
+  inputEl.addEventListener("keydown", e => {
+    if (menuEl.hidden) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, matches.length - 1);
+      render();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+      render();
+    } else if (e.key === "Enter") {
+      if (activeIdx >= 0 && matches[activeIdx]) {
+        e.preventDefault();
+        pick(matches[activeIdx]);
+      }
+    } else if (e.key === "Escape") {
+      close();
+      inputEl.blur();
+    }
+  });
+}
+
+setupAttendeeCombobox(document.getElementById("add-required-contact"), composeRequiredEl);
+setupAttendeeCombobox(document.getElementById("add-optional-contact"), composeOptionalEl);
 
 // ---------- Contact combobox ----------
 const contactSearchEl = document.getElementById("contact-search");
@@ -1585,8 +1630,7 @@ document.getElementById("tpl-export").addEventListener("click", () => {
   const rows = state.templates.map(t => ({
     Name: t.name || "",
     Subject: t.subject || "",
-    Body: t.body || "",
-    ExtraDates: (t.extraDates || []).join(", ")
+    Body: t.body || ""
   }));
   downloadXlsx(rows, "Templates", "templates.xlsx");
 });
@@ -1597,8 +1641,7 @@ document.getElementById("tpl-import").addEventListener("click", () => {
       id: crypto.randomUUID(),
       name: rowGet(row, "name"),
       subject: rowGet(row, "subject"),
-      body: rowGet(row, "body"),
-      extraDates: parseExtraDates(rowGet(row, "extradates", "extra dates", "extra date pickers"))
+      body: rowGet(row, "body")
     })).filter(t => t.name);
     if (!templates.length) { alert("No valid rows. Need at least a Name column."); return; }
     if (!confirm(`Replace ${state.templates.length} templates with ${templates.length} from file?`)) return;
@@ -1652,8 +1695,6 @@ document.getElementById("ct-import").addEventListener("click", () => {
 function renderAll() {
   renderTemplates();
   renderContacts();
-  renderContactPickers();
-  renderExtraDates();
   renderStores();
   renderSelectedStore();
   renderPreview();
