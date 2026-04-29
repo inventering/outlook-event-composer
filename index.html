@@ -911,8 +911,11 @@ function buildOutlookUrl() {
   url.searchParams.set("rru", "addevent");
   url.searchParams.set("subject", subject);
   url.searchParams.set("body", bodyHtml);
+  const [y, m, d] = dateEl.value.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  const enddt = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
   url.searchParams.set("startdt", dateEl.value);
-  url.searchParams.set("enddt", dateEl.value);
+  url.searchParams.set("enddt", enddt);
   url.searchParams.set("allday", "true");
   const required = resolveAttendees(composeRequiredEl.value);
   const optional = resolveAttendees(composeOptionalEl.value);
