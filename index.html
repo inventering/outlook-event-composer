@@ -408,7 +408,7 @@
     </div>
 
     <div class="field-group">
-      <label>Store <span class="hint" style="font-weight:400">— BC and DC emails added as attendees</span></label>
+      <label>Store <span class="hint" style="font-weight:400">— BC → required, DC → optional</span></label>
       <div class="combobox" id="store-combobox">
         <input id="store-search" autocomplete="off" placeholder="Type to search stores…" />
         <button type="button" id="store-clear" class="combobox-clear" title="Clear store" hidden>×</button>
@@ -416,13 +416,25 @@
       </div>
     </div>
 
-    <div class="field-group">
-      <label>Attendees</label>
-      <div class="row">
-        <input id="compose-required" placeholder="comma-separated emails" />
-        <div class="combobox combobox-attendee" id="add-required-contact">
-          <input autocomplete="off" placeholder="+ contact" />
-          <div class="combobox-menu" hidden></div>
+    <div class="field-group form-grid">
+      <div>
+        <label>Required attendees</label>
+        <div class="row">
+          <input id="compose-required" placeholder="comma-separated emails" />
+          <div class="combobox combobox-attendee" id="add-required-contact">
+            <input autocomplete="off" placeholder="+ contact" />
+            <div class="combobox-menu" hidden></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <label>Optional attendees</label>
+        <div class="row">
+          <input id="compose-optional" placeholder="comma-separated emails" />
+          <div class="combobox combobox-attendee" id="add-optional-contact">
+            <input autocomplete="off" placeholder="+ contact" />
+            <div class="combobox-menu" hidden></div>
+          </div>
         </div>
       </div>
     </div>
@@ -438,6 +450,8 @@
 
     <div class="actions">
       <button class="primary" id="open-outlook">Open in Outlook</button>
+      <button id="copy-link">Copy link</button>
+      <button id="download-ics">Download .ics</button>
     </div>
     <p class="hint" id="send-status" hidden></p>
   </section>
@@ -542,6 +556,7 @@ const defaultState = {
     }
   ],
   composeRequired: "",
+  composeOptional: "",
   stores: [],
   addedStoreName: null,
   contacts: [],
@@ -576,6 +591,7 @@ const tplSubjectEl = document.getElementById("tpl-subject");
 const tplBodyEl = document.getElementById("tpl-body");
 
 const composeRequiredEl = document.getElementById("compose-required");
+const composeOptionalEl = document.getElementById("compose-optional");
 const previewSubjectEl = document.getElementById("preview-subject");
 
 function renderTemplates() {
@@ -796,6 +812,14 @@ function escHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function htmlToText(html) {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n");
+  return (tmp.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function plainTextToHtml(text) {
   return escHtml(text).replace(/\r\n|\r|\n/g, "<br>");
 }
@@ -887,15 +911,50 @@ function buildOutlookUrl() {
   url.searchParams.set("rru", "addevent");
   url.searchParams.set("subject", subject);
   url.searchParams.set("body", bodyHtml);
-  const [y, m, d] = dateEl.value.split("-").map(Number);
-  const next = new Date(Date.UTC(y, m - 1, d + 1));
-  const enddt = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
   url.searchParams.set("startdt", dateEl.value);
-  url.searchParams.set("enddt", enddt);
+  url.searchParams.set("enddt", dateEl.value);
   url.searchParams.set("allday", "true");
   const required = resolveAttendees(composeRequiredEl.value);
-  if (required.length) url.searchParams.set("to", required.join(";"));
+  const optional = resolveAttendees(composeOptionalEl.value);
+  const all = [...required, ...optional];
+  if (all.length) url.searchParams.set("to", all.join(";"));
   return url.toString();
+}
+
+function buildICS() {
+  const tpl = getTemplate();
+  if (!tpl || !dateEl.value) return null;
+  const subject = fillPlaceholders(tpl.subject || "");
+  const sourceHtml = looksLikeHtml(tpl.body) ? tpl.body : plainTextToHtml(tpl.body || "");
+  const filledHtml = fillPlaceholders(sourceHtml, { html: true });
+  const bodyText = htmlToText(filledHtml);
+  const icsEscape = s => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
+  const body = icsEscape(bodyText);
+  const altDesc = icsEscape(filledHtml);
+  const start = dateEl.value.replace(/-/g, "");
+  const next = new Date(dateEl.value);
+  next.setDate(next.getDate() + 1);
+  const end = `${next.getFullYear()}${String(next.getMonth()+1).padStart(2,"0")}${String(next.getDate()).padStart(2,"0")}`;
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const required = resolveAttendees(composeRequiredEl.value);
+  const optional = resolveAttendees(composeOptionalEl.value);
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Outlook Composer//EN",
+    "BEGIN:VEVENT",
+    `UID:${crypto.randomUUID()}`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${start}`,
+    `DTEND;VALUE=DATE:${end}`,
+    `SUMMARY:${subject}`,
+    `DESCRIPTION:${body}`,
+    `X-ALT-DESC;FMTTYPE=text/html:${altDesc}`
+  ];
+  required.forEach(addr => lines.push(`ATTENDEE;ROLE=REQ-PARTICIPANT;RSVP=TRUE:mailto:${addr}`));
+  optional.forEach(addr => lines.push(`ATTENDEE;ROLE=OPT-PARTICIPANT;RSVP=TRUE:mailto:${addr}`));
+  lines.push("END:VEVENT", "END:VCALENDAR");
+  return lines.join("\r\n");
 }
 
 function validateCompose() {
@@ -908,7 +967,9 @@ function validateCompose() {
 
 function refreshSendButtons() {
   const err = validateCompose();
-  document.getElementById("open-outlook").disabled = !!err;
+  ["open-outlook", "copy-link", "download-ics"].forEach(id => {
+    document.getElementById(id).disabled = !!err;
+  });
   const status = document.getElementById("send-status");
   status.textContent = err || "";
   status.hidden = !err;
@@ -918,7 +979,9 @@ function resetForNextEvent() {
   clearSelectedStore();
   clearSelectedContact();
   state.composeRequired = "";
+  state.composeOptional = "";
   composeRequiredEl.value = "";
+  composeOptionalEl.value = "";
   dateEl.value = todayISO();
   extraDateEl.value = "";
   numberEl.value = "";
@@ -948,6 +1011,31 @@ document.getElementById("open-outlook").addEventListener("click", () => {
   resetForNextEvent();
 });
 
+document.getElementById("copy-link").addEventListener("click", async () => {
+  const err = validateCompose();
+  if (err) { alert(err); return; }
+  const url = buildOutlookUrl();
+  if (!url) return;
+  await navigator.clipboard.writeText(url);
+  showToast("Link copied ✓");
+});
+
+document.getElementById("download-ics").addEventListener("click", () => {
+  const err = validateCompose();
+  if (err) { alert(err); return; }
+  const ics = buildICS();
+  if (!ics) return;
+  const blob = new Blob([ics], { type: "text/calendar" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  const tpl = getTemplate();
+  a.download = `${(tpl.name || "event").replace(/[^\w\-]+/g, "_")}.ics`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast("Downloaded .ics ✓");
+  resetForNextEvent();
+});
+
 document.getElementById("select-template").addEventListener("change", e => {
   state.selectedTemplateId = e.target.value || null;
   save(); renderPreview();
@@ -958,6 +1046,7 @@ numberEl.addEventListener("input", () => renderPreview());
 timeEl.addEventListener("change", () => renderPreview());
 
 composeRequiredEl.addEventListener("input", () => { state.composeRequired = composeRequiredEl.value; save(); });
+composeOptionalEl.addEventListener("input", () => { state.composeOptional = composeOptionalEl.value; save(); });
 
 function setupAttendeeCombobox(comboboxEl, targetInputEl) {
   const inputEl = comboboxEl.querySelector("input");
@@ -1053,6 +1142,7 @@ function setupAttendeeCombobox(comboboxEl, targetInputEl) {
 }
 
 setupAttendeeCombobox(document.getElementById("add-required-contact"), composeRequiredEl);
+setupAttendeeCombobox(document.getElementById("add-optional-contact"), composeOptionalEl);
 
 // ---------- Contact combobox ----------
 const contactSearchEl = document.getElementById("contact-search");
@@ -1078,9 +1168,10 @@ function selectContact(id) {
   const previous = getContact();
   if (previous && previous.email) {
     removeEmailFromField(composeRequiredEl, previous.email);
+    removeEmailFromField(composeOptionalEl, previous.email);
   }
   state.selectedContactId = c.id;
-  if (c.email) appendEmailToField(composeRequiredEl, c.email);
+  if (c.email) appendEmailToField(composeOptionalEl, c.email);
   save();
   renderSelectedContact();
   renderPreview();
@@ -1091,6 +1182,7 @@ function clearSelectedContact() {
   if (!previous) return;
   if (previous.email) {
     removeEmailFromField(composeRequiredEl, previous.email);
+    removeEmailFromField(composeOptionalEl, previous.email);
   }
   state.selectedContactId = null;
   save();
@@ -1226,12 +1318,12 @@ function selectStore(name) {
     const prev = findStore(state.addedStoreName);
     if (prev) {
       if (prev.bc) removeEmailFromField(composeRequiredEl, prev.bc);
-      if (prev.dc) removeEmailFromField(composeRequiredEl, prev.dc);
+      if (prev.dc) removeEmailFromField(composeOptionalEl, prev.dc);
     }
   }
   state.addedStoreName = store.store;
   if (store.bc) appendEmailToField(composeRequiredEl, store.bc);
-  if (store.dc) appendEmailToField(composeRequiredEl, store.dc);
+  if (store.dc) appendEmailToField(composeOptionalEl, store.dc);
   save();
   renderSelectedStore();
   renderPreview();
@@ -1243,7 +1335,7 @@ function clearSelectedStore() {
   const prev = findStore(state.addedStoreName);
   if (prev) {
     if (prev.bc) removeEmailFromField(composeRequiredEl, prev.bc);
-    if (prev.dc) removeEmailFromField(composeRequiredEl, prev.dc);
+    if (prev.dc) removeEmailFromField(composeOptionalEl, prev.dc);
   }
   state.addedStoreName = null;
   save();
@@ -1622,6 +1714,7 @@ function renderAll() {
 
 dateEl.value = todayISO();
 composeRequiredEl.value = state.composeRequired || "";
+composeOptionalEl.value = state.composeOptional || "";
 renderAll();
 </script>
 </body>
